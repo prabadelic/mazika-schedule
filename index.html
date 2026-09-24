@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mazika + Lotus schedule</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#202124;--fg:#e8eaed;--mut:#9aa0a6;--head:#5b1a1a;--line:#3c4043}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.3 -apple-system,Roboto,Arial,sans-serif}
+header{padding:14px 16px;background:var(--head)}
+h1{margin:0;font-size:18px}
+header p{margin:4px 0 10px;color:#f1d0d0}
+a.btn{display:block;text-align:center;background:#8ab4f8;color:#202124;font-weight:700;text-decoration:none;padding:11px;border-radius:8px}
+.pick{padding:12px 16px}
+select{width:100%;padding:10px;font-size:16px;border-radius:8px;border:0;background:#303134;color:var(--fg)}
+.me{padding:0 16px 8px}
+.line{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.line b{width:84px;flex:none}
+.line i{color:var(--mut);font-style:normal;font-size:12px}
+.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;min-width:860px;width:100%}
+th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{background:var(--head);font-size:12px;position:sticky;top:0}
+th small{display:block;font-weight:400}
+th.rav{background:#1b5e20}
+td.nm,th:first-child{position:sticky;left:0;background:var(--bg);text-align:left;font-weight:700;z-index:1}
+th:first-child{background:var(--head);z-index:2}
+td.nm small{display:block;color:var(--mut);font-weight:400}
+.chip{display:inline-block;min-width:92px;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:700}
+.maz{background:#c62828;color:#fff}.mazday{background:#ef6c00;color:#fff}
+.lot{background:#8e24aa;color:#fff}.lotday{background:#ec407a;color:#fff}
+.double{background:#f9a825;color:#202124}
+.off{background:#303134;color:var(--mut)}.unavail{background:#5f6368;color:var(--fg)}
+.msg{padding:24px 16px;color:var(--mut)}
+.msg button{margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:#8ab4f8;color:#202124;font-weight:700}
+footer{padding:12px 16px;color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mazika + Lotus schedule</h1>
+  <p id="week">Loading...</p>
+  <a class="btn" href="https://form.mazikalounge.com">Send availability / ask for a swap</a>
+</header>
+<div class="pick"><select id="who" disabled><option value="">Everyone</option></select></div>
+<div id="mine"></div>
+<div id="out"><div class="msg">Loading the schedule...</div></div>
+<footer id="foot"></footer>
+
+<script>
+// Live data from the scheduler's Apps Script web app (?format=json).
+// Fetched WITHOUT Google cookies, so phones signed into several Google
+// accounts never get Google's "unable to open the file" page.
+var DATA_URL = 'https://script.google.com/macros/s/AKfycbxm3W6a2olUYM4P_VECW86Q_4UF6GffUvxdVSQHGQ4Euj_bddTcrPpdciG2YlfyNmrT/exec?format=json';
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function render(g){
+  document.getElementById('week').textContent = 'Week of ' + g.week;
+  var head = g.days.map(function(d){
+    return '<th'+(d.ravens?' class="rav"':'')+'>'+d.day+'<small>'+d.date+(d.ravens?' RAVENS NOON':'')+'</small></th>';
+  }).join('');
+  var body = g.rows.map(function(r){
+    return '<tr><td class="nm">'+esc(r.name)+'<small>'+r.shifts+' shift'+(r.shifts===1?'':'s')+'</small></td>'+
+      r.cells.map(function(c){
+        return '<td><span class="chip '+c.kind+'"'+(c.hours?' title="'+esc(c.hours)+'"':'')+'>'+esc(c.text)+'</span></td>';
+      }).join('')+'</tr>';
+  }).join('');
+  document.getElementById('out').innerHTML =
+    '<div class="wrap" id="grid"><table><thead><tr><th>Staff</th>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+
+  var sel = document.getElementById('who');
+  sel.innerHTML = '<option value="">Everyone</option>' + g.rows.map(function(r,i){
+    return '<option value="'+i+'">'+esc(r.name)+'</option>';
+  }).join('');
+  sel.disabled = false;
+
+  function show(v){
+    var mine = document.getElementById('mine');
+    if (v === '') { mine.innerHTML=''; document.getElementById('grid').hidden=false; return; }
+    var r = g.rows[+v];
+    mine.innerHTML = '<div class="me">'+r.cells.map(function(c,i){
+      return '<div class="line"><b>'+g.days[i].day+' '+g.days[i].date+'</b><span class="chip '+c.kind+'">'+esc(c.text)+'</span>'+
+        (c.hours?'<i>'+esc(c.hours)+'</i>':'')+'</div>';
+    }).join('')+'</div>';
+    document.getElementById('grid').hidden = true;
+  }
+  sel.onchange = function(){
+    show(sel.value);
+    try { localStorage.setItem('who', sel.value === '' ? '' : g.rows[+sel.value].name); } catch(e){}
+  };
+  try {
+    var saved = localStorage.getItem('who');
+    if (saved) {
+      for (var i=0;i<g.rows.length;i++) if (g.rows[i].name === saved) { sel.value = String(i); show(String(i)); break; }
+    }
+  } catch(e){}
+
+  document.querySelectorAll('span.chip[title]').forEach(function(c){ c.onclick = function(){ alert(c.title); }; });
+  document.getElementById('foot').textContent =
+    'Updated ' + g.updated + '. Pull down or reload to refresh. Tap a coloured shift to see its hours.';
+}
+
+function fail(){
+  document.getElementById('week').textContent = '';
+  document.getElementById('out').innerHTML =
+    '<div class="msg">Could not load the schedule. Check your signal and try again.<br><button onclick="load()">Try again</button></div>';
+}
+
+function load(){
+  document.getElementById('out').innerHTML = '<div class="msg">Loading the schedule...</div>';
+  fetch(DATA_URL + '&t=' + Date.now(), {credentials:'omit', cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(fail);
+}
+load();
+</script>
+</body>
+</html>
